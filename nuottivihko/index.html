@@ -1,0 +1,91 @@
+<!doctype html><html lang="fi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Soittopeli – Valitse kappale</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#071f29;color:#ffeac1;font-family:Georgia,serif}main{isolation:isolate;position:relative;height:100svh;min-height:240px;overflow:hidden;background:#093143 url(kuvat/talvimaisema.webp) center bottom/cover}header{position:absolute;inset:4% 8% auto;display:flex;align-items:center;justify-content:space-between;gap:.5em}h1{font-size:clamp(1.6rem,5vw,4rem);margin:0}button{font:inherit;border:1px solid #fce7be;border-radius:.55em;color:inherit;background:#0b2934e0;padding:.55em .9em;cursor:pointer}.line{position:absolute;top:36%;height:28%;left:50%;transform:translateX(-50%);border-left:2px solid #ffedbe;box-shadow:0 0 6px #ffe3a4}.line span{position:absolute;bottom:100%;transform:translateX(-50%);white-space:nowrap}.lane{position:absolute;left:0;right:0;top:50%}.note{position:absolute;left:0;top:0;--size:clamp(44px,8.3vw,122px)}.tail{position:absolute;height:calc(var(--size)*.35);left:0;top:0;transform:translateY(-50%)}.head{position:absolute;width:var(--size);aspect-ratio:336/326;transform:translate(-50%,-50%);display:grid;place-items:center;background:url(kuvat/tahti.webp) center/contain no-repeat;filter:drop-shadow(0 0 5px #e9a74480)}.name{color:#422808;font-size:calc(var(--size)*.32);font-weight:bold;transform:translateY(7%)}.hint{position:absolute;left:50%;top:66%;transform:translateX(-50%);width:min(34%,330px);aspect-ratio:1200/316;background:url(kuvat/sormituskortti.webp) center/100% 100%;display:grid;place-content:center;text-align:center;color:#362b22}.hint[hidden]{display:none}.keys{display:flex;align-items:center;justify-content:center;gap:.22em}.keys i{display:inline-block;border:1.5px solid;border-radius:50%;width:.72em;height:.72em}.keys i:nth-child(5){margin-left:.45em}.keys .down{background:currentColor}.keys .side{transform:translateY(.27em);width:.54em;height:.54em} @media(max-width:550px){header{inset-inline:4%}.hint{width:40%}.hint b,.keys{font-size:.8rem}}
+
+.score{display:block;margin:.18em 0;color:#ffe6ac;font:600 clamp(14px,1.9vw,20px) system-ui;font-variant-numeric:tabular-nums}@media(max-width:520px){.title-score{display:flex;align-items:baseline;gap:1em}}
+.burst{position:absolute;top:0;left:0;pointer-events:none;animation:clear-burst .68s linear}
+.flash{position:absolute;width:clamp(64px,12vw,164px);aspect-ratio:1;border-radius:50%;
+ background:radial-gradient(circle,transparent 15%,#fff5bdba 35%,#ffcc6355 49%,transparent 70%);
+ animation:flash .32s ease-out both}
+.confetti{position:absolute;width:var(--w);height:var(--h);border-radius:2px;
+ background:var(--color);box-shadow:0 0 3px #ffefac80;animation:scatter .62s ease-out both}
+@keyframes clear-burst{from{visibility:visible}to{visibility:visible}}
+@keyframes flash{from{transform:translate(-50%,-50%) scale(.58);opacity:1}to{transform:translate(-50%,-50%) scale(1.38);opacity:0}}
+@keyframes scatter{0%{transform:translate(-50%,-50%) rotate(var(--spin));opacity:1}
+ 60%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(calc(var(--spin) + 150deg));opacity:0}}
+@media(prefers-reduced-motion:reduce){.confetti{display:none}.flash{animation:none;opacity:.35;transform:translate(-50%,-50%)}.burst{animation-duration:.16s}}
+
+#lumisade{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+.barline{position:absolute;left:0;top:0;width:2px;height:clamp(70px,12vw,156px);margin-top:clamp(-78px,-6vw,-35px);margin-left:-1px;pointer-events:none;z-index:-1;background:linear-gradient(to bottom,transparent,#e9eedab3 12%,#e9eedaa6 88%,transparent)}
+.lane{isolation:isolate}
+.hint{top:61%;width:min(36%,265px)}.line span{font-size:clamp(14px,2vw,23px)}.note.accepted .head{filter:drop-shadow(0 0 9px #efffc5)}header{inset:3% 4% auto;align-items:flex-start}
+@media(max-height:510px){.hint{top:60%;width:164px}h1{font-size:1.8rem}header{inset:2% 3% auto}}
+@media(max-width:520px){header{display:block}.hint{top:61%;width:48%}}
+
+header{z-index:1}
+.controls{display:grid;grid-template-columns:auto auto auto minmax(8.6em,auto);gap:5px;align-items:center;font:600 clamp(.86rem,1.45vw,1rem) Georgia,serif}
+.plate{display:flex;position:relative;align-items:center;justify-content:center;height:48px;min-width:0;color:#fff2cf;background:transparent url(kuvat/saadin.webp) center/100% 100% no-repeat;border:0;border-radius:12px;text-shadow:0 1px 2px #07160a}
+.controls select,.controls input{font:inherit;color:inherit;background:transparent;border:0;text-shadow:inherit;color-scheme:dark}
+.choice select{width:100%;height:100%;padding:0 1.9em 0 1.2em;appearance:none;-webkit-appearance:none;cursor:pointer}
+.choice::after{content:"";position:absolute;right:1.05em;top:45%;width:.32em;height:.32em;border:solid #efce82;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);pointer-events:none}
+.choice option{color:#fff2cf;background:#153323}
+.tempo{gap:.2em;padding:0 .9em}
+#bpm{width:3.25em;min-width:0;height:100%;padding:0;text-align:center;font-variant-numeric:tabular-nums}
+#bpm-slider{min-width:3.1rem;width:clamp(3.1rem,8vw,6.5rem);height:100%;margin:0;accent-color:#f3d88c;cursor:pointer}
+.metronome{padding:0 1em;gap:.4em;white-space:nowrap;cursor:pointer}
+.metronome input{width:1.1em;height:1.1em;margin:0;accent-color:#f3d88c}
+#back-to-songs{position:absolute;bottom:3%;left:4%;min-height:44px;font:600 .92rem Georgia,serif}
+.tempo input:focus-visible{outline:2px solid #ffe3a0;outline-offset:-4px}
+.controls button{font:inherit;white-space:nowrap;padding:0 1.2em;touch-action:manipulation}
+.plate:focus-within{outline:2px solid #ffe3a0;outline-offset:1px}
+.plate select:focus,.plate input:focus{outline:0}
+#play:active{transform:translateY(1px)}
+@media(max-width:850px){header{inset-inline:2.5%}.controls{gap:3px;grid-template-columns:auto auto auto minmax(7.9em,auto)}}
+@media(max-width:860px){
+ header{display:block}.title-score{display:flex;align-items:baseline;gap:1em}
+ .controls{width:fit-content;max-width:100%;margin-top:.2rem}
+}
+@media(max-width:635px){
+ .controls{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1.14fr);gap:2px 4px;max-width:26rem}
+ .plate{height:44px}
+ .metronome{white-space:normal;line-height:1.05}
+}
+@media(max-height:420px) and (min-width:581px){
+ header{inset-block-start:1%}h1{font-size:1.6rem}.controls{margin-top:0}.plate{height:44px}
+}
+
+#song-picker{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;padding:1rem}
+#song-picker[hidden]{display:none}
+.song-card{width:min(100%,23rem);padding:clamp(1.2rem,4vw,2rem);text-align:center;border:1px solid #e4c38780;border-radius:1rem;background:#092935f2;box-shadow:0 6px 24px #00152266}
+.song-card h1{font-size:clamp(1.6rem,4vw,2.25rem)}
+.song-list{display:grid;gap:.4rem;list-style:none;padding:3px;margin:.85rem 0 0;max-height:50svh;overflow-y:auto;overscroll-behavior:contain}
+.song-list .plate{width:100%;min-height:3.6rem;height:auto;padding:.55em 1em;overflow-wrap:anywhere;font:bold 1.45rem Georgia,serif}
+.song-list button:disabled{cursor:wait}
+#song-status{font:1rem/1.4 system-ui;margin:.65em 0}
+#song-status:empty{margin:0}
+</style><main><canvas id="lumisade" aria-hidden="true"></canvas>
+<section id="song-picker" aria-labelledby="song-heading">
+  <div class="song-card">
+    <h1 id="song-heading">Valitse kappale</h1>
+    <ul class="song-list" id="song-list"></ul>
+    <p id="song-status" role="status"></p>
+  </div>
+</section>
+<div id="game" hidden><header><div class="title-score"><h1 id="song-title"></h1><span class="score">Pisteet <strong id="score">0</strong></span></div><div class="controls">
+  <label class="plate choice"><select id="level" aria-label="Vaikeustaso">
+    <option value="1">Taso 1</option><option value="2">Taso 2</option>
+  </select></label>
+  <div class="plate tempo" role="group" aria-label="Tempo">
+    <span aria-hidden="true">♩ =</span>
+    <input id="bpm" type="number" inputmode="numeric" min="40" max="180" step="1" value="80" aria-label="Tempo iskuina minuutissa">
+    <input id="bpm-slider" type="range" min="40" max="180" step="1" value="80" aria-label="Säädä tempoa">
+  </div>
+  <label class="plate metronome"><input id="metronome" type="checkbox" checked><span>Metronomi</span></label>
+  <button class="plate" id="play" type="button">Käynnistä</button>
+</div></header><div class="line"><span id="cue" role="status">Soita tässä</span></div><div class="lane" aria-hidden="true"></div><div class="hint" hidden><b id="finger-title"></b><span class="keys"></span></div>
+<button id="back-to-songs" type="button">‹ Kappaleet</button></div></main>
+<script src="resonator-engine.js"></script>
+<script src="lumisade.js"></script>
+<script src="taktell.js"></script>
+<script src="kappaleet.js"></script>
+<script src="peli.js"></script></html>
