@@ -187,8 +187,8 @@ function isSounding(midi, incoming) {
   if (!microphone.ready || !micVoice || micVoice === incoming ||
       micVoice.ended || micVoice.midi !== midi) return false;
   const state = microphone.getState();
-  if (Number(state.note?.id) !== midi) return false;
-  return state.accepted ? Number(state.accepted.id) === midi : state.aboveGate;
+  if (!state.aboveGate || Number(state.note?.id) !== midi) return false;
+  return !state.accepted || Number(state.accepted.id) === midi;
 }
 function progress(incoming = null) {
   if (origin === null) return;
@@ -296,6 +296,10 @@ play.onclick = async () => {
 window.addEventListener('resize', draw);
 
 const microphone = new ResonatorSession();
+microphone.setReleaseDelayMs(0);
+// Bridge a brief pitch dropout, but do not let breath or room noise sustain a star.
+const maxUnpitchedMs = 20;
+let unpitchedMs = 0;
 let micVoice = null;
 const game = document.getElementById('game');
 const picker = document.getElementById('song-picker');
@@ -322,8 +326,6 @@ for (const song of songs) {
 
 function refreshMic() {
   const state = microphone.ready ? microphone.getState() : null;
-  const label = state?.note?.name.toLowerCase() || '—';
-  if (soundingNote.textContent !== label) soundingNote.textContent = label;
   if (microphone.ready) {
     if (game.hidden && !document.hidden) {
       songStatus.textContent = '';
@@ -339,8 +341,11 @@ function refreshMic() {
       const midi = Number(state.note.id);
       if (micVoice?.midi !== midi || micVoice.ended) beginVoice(midi);
     }
+    const label = micVoice && !micVoice.ended && state.note ? state.note.name.toLowerCase() : '—';
+    if (soundingNote.textContent !== label) soundingNote.textContent = label;
     return;
   }
+  endVoice();
   micVoice = null;
   const active = microphone.opening || microphone.engine.running;
   const wasPlaying = !game.hidden;
@@ -366,12 +371,23 @@ function refreshMic() {
 }
 microphone.addEventListener('change', refreshMic);
 function beginVoice(midi) {
+  unpitchedMs = 0;
   micVoice = {midi, ended:false};
   inputNote(micVoice);
 }
-microphone.engine.addEventListener('silence', () => {
-  // The display holds its last note briefly after the sound has ended.
+function endVoice() {
+  unpitchedMs = 0;
   if (micVoice) micVoice.ended = true;
+  if (soundingNote.textContent !== '—') soundingNote.textContent = '—';
+}
+microphone.engine.addEventListener('silence', endVoice);
+microphone.engine.addEventListener('input', ({detail}) => {
+  if (detail.accepted) {
+    unpitchedMs = 0;
+  } else if (micVoice && !micVoice.ended) {
+    unpitchedMs += detail.blockMs;
+    if (unpitchedMs >= maxUnpitchedMs) endVoice();
+  }
 });
 microphone.addEventListener('articulation', ({detail}) => {
   if (!microphone.ready || micVoice?.midi !== detail.midi) return;

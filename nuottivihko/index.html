@@ -66,12 +66,14 @@ header{z-index:1}
 .song-list button:disabled{cursor:wait}
 #song-status{font:1rem/1.4 system-ui;margin:.65em 0}
 #song-status:empty{margin:0}
+.game-version{display:block;margin-top:.5rem;text-align:right;color:#a1b3b5;font:0.75rem/1.2 system-ui;font-variant-numeric:tabular-nums}
 </style><main><canvas id="lumisade" aria-hidden="true"></canvas>
 <section id="song-picker" aria-labelledby="song-heading">
   <div class="song-card">
     <h1 id="song-heading">Valitse kappale</h1>
     <ul class="song-list" id="song-list"></ul>
     <p id="song-status" role="status"></p>
+    <small class="game-version" title="Pelin versio">v1.0.0</small>
   </div>
 </section>
 <div id="game" hidden><header><div class="title-score"><h1 id="song-title"></h1><span class="score">Pisteet <strong id="score">0</strong></span></div><div class="controls">
