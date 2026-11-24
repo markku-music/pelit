@@ -222,6 +222,7 @@ function markHit(target) {
   setScore(score + 1);
   if (target.timing !== null) showAccuracy();
   celebrate(target.el);
+  take?.hits.push(items.indexOf(target));
 }
 function nextTarget(played) {
   if (played) markHit(items[targetIndex]);
@@ -307,6 +308,7 @@ level.addEventListener('change', () => {
 function animate() {
   if (origin === null) return;
   progress();
+  captureFrame();
   draw();
   if (beat >= duration) { pause(); return; }
   frame = requestAnimationFrame(animate);
@@ -315,6 +317,7 @@ function pause() {
   window.kulkusetSnow?.setPaused(true);
   beat = Math.min(duration, position(audio.currentTime));
   if (waiting) from = clockBeat(audio.currentTime);
+  pauseTake(beat >= duration);
   origin = null;
   cancelAnimationFrame(frame);
   clearInterval(timer);
@@ -342,6 +345,7 @@ play.onclick = async () => {
       resetResults();
       waiting = false; hint.hidden = true;
     }
+    startTake(play.textContent === 'Jatka');
     if (!waiting) from = beat;
     origin = audio.currentTime + .05;
     timingSegments.length = 0;
@@ -395,6 +399,7 @@ for (const song of songs) {
 }
 
 function refreshMic() {
+  if (listening && microphone.ready) return;
   const state = microphone.ready ? microphone.getState() : null;
   if (microphone.ready) {
     if (game.hidden && !document.hidden) {
@@ -452,7 +457,7 @@ function endVoice() {
     micVoice.ended = true;
     micVoice.earlyHit = null;
   }
-  if (soundingNote.textContent !== '—') soundingNote.textContent = '—';
+  if (!listening && soundingNote.textContent !== '—') soundingNote.textContent = '—';
 }
 microphone.engine.addEventListener('silence', endVoice);
 microphone.engine.addEventListener('input', ({detail}) => {
@@ -482,6 +487,7 @@ microphone.addEventListener('articulation', ({detail}) => {
 });
 
 function leaveGame() {
+  discardTake();
   if (origin !== null) pause();
   microphone.stop();
 }

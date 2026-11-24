@@ -69,13 +69,13 @@ header{z-index:1}
 .game-version{display:block;margin-top:.5rem;text-align:right;color:#a1b3b5;font:0.75rem/1.2 system-ui;font-variant-numeric:tabular-nums}
 .results{display:flex;flex-wrap:wrap;gap:0 .85rem}.results .score{white-space:nowrap}
 @media(max-width:420px){.title-score{gap:.6rem}.results{column-gap:.6rem}}
-</style><main><canvas id="lumisade" aria-hidden="true"></canvas>
+#listen{position:absolute;bottom:13%;left:4%}#listen[hidden]{display:none}</style><main><canvas id="lumisade" aria-hidden="true"></canvas>
 <section id="song-picker" aria-labelledby="song-heading">
   <div class="song-card">
     <h1 id="song-heading">Valitse kappale</h1>
     <ul class="song-list" id="song-list"></ul>
     <p id="song-status" role="status"></p>
-    <small class="game-version" title="Pelin versio">v1.1.1</small>
+    <small class="game-version" title="Pelin versio">v1.2.0</small>
   </div>
 </section>
 <div id="game" hidden><header><div class="title-score"><h1 id="song-title"></h1><div class="results">
@@ -93,10 +93,11 @@ header{z-index:1}
   <label class="plate metronome"><input id="metronome" type="checkbox" checked><span>Metronomi</span></label>
   <button class="plate" id="play" type="button">Käynnistä</button>
 </div></header><div class="line"><span id="cue" role="status">Soita tässä</span></div><div class="lane" aria-hidden="true"></div><div class="hint" hidden><b id="finger-title"></b><span class="keys"></span></div>
+<button id="listen" type="button" hidden>Kuuntele oma soitto</button>
 <button id="back-to-songs" type="button">‹ Kappaleet</button>
 <div class="sounding-note"><span>Soiva sävel</span><output id="sounding-note" aria-label="Soiva sävel" aria-live="off">—</output></div></div></main>
 <script src="resonator-engine.js"></script>
 <script src="lumisade.js"></script>
 <script src="taktell.js"></script>
 <script src="kappaleet.js"></script>
-<script src="peli.js"></script></html>
+<script src="peli.js"></script><script src="uusinta.js"></script></html>
