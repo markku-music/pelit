@@ -35,6 +35,9 @@ header{z-index:1}
 .metronome{padding:0 1em;gap:.4em;white-space:nowrap;cursor:pointer}
 .metronome input{width:1.1em;height:1.1em;margin:0;accent-color:#f3d88c}
 #back-to-songs{position:absolute;bottom:3%;left:4%;min-height:44px;font:600 .92rem Georgia,serif}
+.sounding-note{position:absolute;right:4%;bottom:3%;display:grid;justify-items:center;align-content:center;gap:2px;min-width:7rem;padding:.4rem .75rem;border:1px solid #d9be827a;border-radius:.6rem;background:#0b2934ed;color:#fff0c7}
+.sounding-note span{font:600 .78rem/1.2 system-ui}
+.sounding-note output{font:bold clamp(1.5rem,3.7vw,2.3rem)/1.05 Georgia,serif}
 .tempo input:focus-visible{outline:2px solid #ffe3a0;outline-offset:-4px}
 .controls button{font:inherit;white-space:nowrap;padding:0 1.2em;touch-action:manipulation}
 .plate:focus-within{outline:2px solid #ffe3a0;outline-offset:1px}
@@ -83,7 +86,8 @@ header{z-index:1}
   <label class="plate metronome"><input id="metronome" type="checkbox" checked><span>Metronomi</span></label>
   <button class="plate" id="play" type="button">Käynnistä</button>
 </div></header><div class="line"><span id="cue" role="status">Soita tässä</span></div><div class="lane" aria-hidden="true"></div><div class="hint" hidden><b id="finger-title"></b><span class="keys"></span></div>
-<button id="back-to-songs" type="button">‹ Kappaleet</button></div></main>
+<button id="back-to-songs" type="button">‹ Kappaleet</button>
+<div class="sounding-note"><span>Soiva sävel</span><output id="sounding-note" aria-label="Soiva sävel" aria-live="off">—</output></div></div></main>
 <script src="resonator-engine.js"></script>
 <script src="lumisade.js"></script>
 <script src="taktell.js"></script>

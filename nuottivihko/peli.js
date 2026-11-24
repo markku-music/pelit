@@ -184,11 +184,12 @@ function nextTarget(played) {
 function earlyWindow() { return Math.min(.150, secondsPerBeat * .40); }
 function lateWindow() { return Math.min(.200, secondsPerBeat * .45); }
 function heldFor(midi, incoming) {
-  if (micVoice && micVoice !== incoming && !micVoice.used && micVoice.midi === midi && microphone.ready) {
-    const state = microphone.getState();
-    if (state.aboveGate && Number(state.accepted?.id) === midi && Number(state.note?.id) === midi) return micVoice;
-  }
-  return null;
+  if (!microphone.ready || !micVoice || micVoice === incoming || micVoice.used ||
+      micVoice.ended || micVoice.midi !== midi) return null;
+  const state = microphone.getState();
+  if (Number(state.note?.id) !== midi) return null;
+  const live = state.accepted ? Number(state.accepted.id) === midi : state.aboveGate;
+  return live ? micVoice : null;
 }
 function progress(incoming = null) {
   if (origin === null) return;
@@ -304,6 +305,7 @@ const game = document.getElementById('game');
 const picker = document.getElementById('song-picker');
 const songList = document.getElementById('song-list');
 const songStatus = document.getElementById('song-status');
+const soundingNote = document.getElementById('sounding-note');
 let lastSongButton = null;
 
 for (const song of songs) {
@@ -323,6 +325,9 @@ for (const song of songs) {
 }
 
 function refreshMic() {
+  const state = microphone.ready ? microphone.getState() : null;
+  const label = state?.note?.name.toLowerCase() || '—';
+  if (soundingNote.textContent !== label) soundingNote.textContent = label;
   if (microphone.ready) {
     if (game.hidden && !document.hidden) {
       songStatus.textContent = '';
@@ -331,6 +336,12 @@ function refreshMic() {
       document.title = selectedSong.title + ' – Soittopeli';
       draw();
       play.focus();
+    }
+    // A stable new pitch is playable immediately, including a legato change.
+    // The articulation observer can report that same change several blocks later.
+    if (state.note && state.note.id === state.accepted?.id) {
+      const midi = Number(state.note.id);
+      if (micVoice?.midi !== midi) beginVoice(midi);
     }
     return;
   }
@@ -358,10 +369,20 @@ function refreshMic() {
   if (wasPlaying && !active && !document.hidden) lastSongButton?.focus();
 }
 microphone.addEventListener('change', refreshMic);
-microphone.addEventListener('articulation', ({detail}) => {
-  if (!microphone.ready) return;
-  micVoice = {midi:detail.midi, used:false};
+function beginVoice(midi) {
+  micVoice = {midi, used:false, ended:false};
   inputNote(micVoice);
+}
+microphone.engine.addEventListener('silence', () => {
+  // The display holds its last note briefly after the sound has ended.
+  if (micVoice) micVoice.ended = true;
+});
+microphone.addEventListener('articulation', ({detail}) => {
+  if (!microphone.ready || micVoice?.midi !== detail.midi) return;
+  // Only a separate attack can play another star at the same pitch.
+  if (detail.kind === 'reattack' || (detail.kind === 'onset' && micVoice.ended)) {
+    beginVoice(detail.midi);
+  }
 });
 
 function leaveGame() {
