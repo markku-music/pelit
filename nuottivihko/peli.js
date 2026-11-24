@@ -40,7 +40,7 @@ function loadSong(song) {
   play.textContent = 'Käynnistä';
   beat = from = -4;
   targetIndex = mistakes = 0;
-  early = waiting = false;
+  waiting = false;
   hint.hidden = true;
   resetResults();
   tell('Soita tässä');
@@ -85,7 +85,7 @@ const timingSegments = [];
 const level = document.getElementById('level');
 const cue = document.getElementById('cue');
 const hint = document.querySelector('.hint');
-let targetIndex = 0, waiting = false, early = false, mistakes = 0;
+let targetIndex = 0, waiting = false, mistakes = 0;
 const scoreLabel = document.getElementById('score');
 const accuracyLabel = document.getElementById('accuracy');
 let score = 0;
@@ -227,7 +227,6 @@ function nextTarget(played) {
   if (played) markHit(items[targetIndex]);
   releaseWait();
   targetIndex++;
-  early = false;
   mistakes = 0;
   hint.hidden = true;
   tell('Soita tässä');
@@ -252,9 +251,10 @@ function progress(incoming = null) {
   while (targetIndex < items.length) {
     const target = items[targetIndex];
     if (beat + .000001 < target.start) break;
-    if (early) { nextTarget(true); continue; }
     if (practice() || !pastWindow(target, beat)) {
       if (isSounding(target.midi, incoming)) {
+        if (micVoice.earlyHit?.note === target) recordTiming(target, micVoice.earlyHit.beat);
+        micVoice.earlyHit = null;
         nextTarget(true);
         continue;
       }
@@ -279,12 +279,17 @@ function inputNote(voice, at) {
     playedBeat >= note.opens - beatEpsilon && !pastWindow(note, playedBeat));
   if (!measured) return;
   if (measured.midi === voice.midi) {
-    recordTiming(measured, playedBeat);
-    if (measured !== target) {
-      if (measured.start <= beat) markHit(measured);
-    } else if (beat >= target.start - .000001) nextTarget(true);
-    else early = true;
-  } else if (measured === target && !early && practice()) {
+    if (measured === target && beat + beatEpsilon < target.start) {
+      // Keep the onset time on this breath only. It earns its point at the line.
+      voice.earlyHit = {note:target, beat:playedBeat};
+    } else if (measured.start <= beat + beatEpsilon) {
+      if (!measured.hit && playedBeat < measured.start - beatEpsilon &&
+          !isSounding(measured.midi, null)) return;
+      recordTiming(measured, playedBeat);
+      if (measured === target) nextTarget(true);
+      else markHit(measured);
+    }
+  } else if (measured === target && practice()) {
     mistakes++;
     tell('Odotetaan ' + target.name);
     if (mistakes >= 2) showFingering(target);
@@ -335,7 +340,7 @@ play.onclick = async () => {
     if (beat >= duration) {
       beat = -4; targetIndex = 0; mistakes = 0;
       resetResults();
-      early = waiting = false; hint.hidden = true;
+      waiting = false; hint.hidden = true;
     }
     if (!waiting) from = beat;
     origin = audio.currentTime + .05;
@@ -438,18 +443,25 @@ function refreshMic() {
 microphone.addEventListener('change', refreshMic);
 function beginVoice(midi, at = microphone.engine.context.currentTime) {
   unpitchedMs = 0;
-  micVoice = {midi, ended:false};
+  micVoice = {midi, ended:false, earlyHit:null};
   inputNote(micVoice, at);
 }
 function endVoice() {
   unpitchedMs = 0;
-  if (micVoice) micVoice.ended = true;
+  if (micVoice) {
+    micVoice.ended = true;
+    micVoice.earlyHit = null;
+  }
   if (soundingNote.textContent !== '—') soundingNote.textContent = '—';
 }
 microphone.engine.addEventListener('silence', endVoice);
 microphone.engine.addEventListener('input', ({detail}) => {
   if (detail.accepted) {
     unpitchedMs = 0;
+    // A short sound can cross the line between two animation frames.
+    const target = items[targetIndex];
+    if (origin !== null && target && Number(detail.action) === target.midi &&
+        position(audio.currentTime) >= target.start) progress();
   } else if (micVoice && !micVoice.ended) {
     unpitchedMs += detail.blockMs;
     if (unpitchedMs >= maxUnpitchedMs) endVoice();
@@ -462,6 +474,8 @@ microphone.addEventListener('articulation', ({detail}) => {
   if (detail.kind === 'onset') articulationEpoch = now - detail.timeMs / 1000;
   if (micVoice?.midi !== detail.midi) return;
   if (detail.kind === 'reattack' || (detail.kind === 'onset' && micVoice.ended)) {
+    const state = microphone.getState();
+    if (!state.aboveGate || Number(state.accepted?.id) !== detail.midi) return;
     const at = articulationEpoch === null ? now : Math.min(now, articulationEpoch + detail.timeMs / 1000);
     beginVoice(detail.midi, at);
   }
