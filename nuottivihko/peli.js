@@ -22,6 +22,14 @@ function loadSong(song) {
     }
     duration += beats;
   }
+  // One shared boundary for adjacent stars, including the time between notes across rests.
+  for (let i = 0; i < items.length; i++) {
+    const note = items[i];
+    const previousStart = items[i - 1]?.start ?? note.start - note.beats;
+    const nextStart = items[i + 1]?.start ?? note.start + note.beats;
+    note.opens = (previousStart + note.start) / 2;
+    note.closes = (note.start + nextStart) / 2;
+  }
   for (let start = 0; start <= duration; start += 4) {
     const el = document.createElement('i');
     el.className = 'barline';
@@ -34,7 +42,7 @@ function loadSong(song) {
   targetIndex = mistakes = 0;
   early = waiting = false;
   hint.hidden = true;
-  setScore(0);
+  resetResults();
   tell('Soita tässä');
 }
 const colours = ['#fff4c6','#ffd473','#ed987d','#91d3c7'];
@@ -73,21 +81,60 @@ const play = document.getElementById('play');
 let secondsPerBeat = .75, beat = -4, from = -4, origin = null;
 let audio, sample, frame = 0, timer = null, nextClick = -4, pendingStart = null;
 const scheduled = new Map();
+const timingSegments = [];
 const level = document.getElementById('level');
 const cue = document.getElementById('cue');
 const hint = document.querySelector('.hint');
 let targetIndex = 0, waiting = false, early = false, mistakes = 0;
 const scoreLabel = document.getElementById('score');
+const accuracyLabel = document.getElementById('accuracy');
 let score = 0;
 function setScore(value) {
   score = value;
   scoreLabel.textContent = String(value);
 }
+function resetResults() {
+  setScore(0);
+  for (const note of items) {
+    note.hit = false;
+    note.timing = null;
+    note.el.classList.remove('accepted');
+  }
+  showAccuracy();
+}
+function showAccuracy() {
+  const measured = items.filter(note => note.hit && note.timing !== null);
+  const total = measured.reduce((sum, note) => sum + note.timing, 0);
+  accuracyLabel.textContent = measured.length ? Math.round(total / measured.length) + ' %' : '—';
+}
+function recordTiming(note, playedBeat) {
+  if (note.timing !== null) return;
+  const offset = playedBeat - note.start;
+  const span = offset < 0 ? note.start - note.opens : note.closes - note.start;
+  note.timing = 100 * Math.max(0, 1 - Math.abs(offset) / span);
+  if (note.hit) showAccuracy();
+}
 function practice() { return level.value === '1'; }
 function tell(text) { if (cue.textContent !== text) cue.textContent = text; }
 
 function position(now) {
-  return origin === null || waiting ? beat : from + Math.max(0, now - origin) / secondsPerBeat;
+  return origin === null || waiting ? beat : clockBeat(now);
+}
+// This clock keeps musical time even while the practice playhead waits on a star.
+function clockBeat(now) {
+  return from + Math.max(0, now - origin) / secondsPerBeat;
+}
+// Timestamped reattacks can arrive after a tempo change or a practice wait.
+function rememberClock() {
+  timingSegments.push({at:origin, from, secondsPerBeat});
+}
+function beatAtAttack(time) {
+  for (let i = timingSegments.length - 1; i >= 0; i--) {
+    const segment = timingSegments[i];
+    if (time >= segment.at)
+      return segment.from + (time - segment.at) / segment.secondsPerBeat;
+  }
+  return null;
 }
 function cancelClicks(futureOnly = false) {
   for (const [n, click] of scheduled) {
@@ -120,12 +167,13 @@ function schedule() {
 function updateSettings(value) {
   if (origin !== null) {
     const now = audio.currentTime;
-    from = position(now);
+    from = clockBeat(now);
     origin = Math.max(now, origin);
     nextClick = origin > now ? Math.ceil(from) : Math.floor(from) + 1;
     cancelClicks(true);
   }
   secondsPerBeat = 60 / value;
+  if (origin !== null) rememberClock();
   schedule();
 }
 function setTempo(input) {
@@ -164,15 +212,19 @@ function releaseWait() {
   waiting = false;
   from = beat;
   origin = audio.currentTime;
+  rememberClock();
   nextClick = Math.floor(beat) + 1;
 }
+function markHit(target) {
+  if (target.hit) return;
+  target.hit = true;
+  target.el.classList.add('accepted');
+  setScore(score + 1);
+  if (target.timing !== null) showAccuracy();
+  celebrate(target.el);
+}
 function nextTarget(played) {
-  const target = items[targetIndex];
-  if (played) {
-    target.el.classList.add('accepted');
-    setScore(score + 1);
-    celebrate(target.el);
-  }
+  if (played) markHit(items[targetIndex]);
   releaseWait();
   targetIndex++;
   early = false;
@@ -180,9 +232,13 @@ function nextTarget(played) {
   hint.hidden = true;
   tell('Soita tässä');
 }
-// Windows are in seconds. Cap them at fast tempi to keep consecutive attacks distinct.
-function earlyWindow() { return Math.min(.150, secondsPerBeat * .40); }
-function lateWindow() { return Math.min(.200, secondsPerBeat * .45); }
+// A shared midpoint belongs to the following star. The last outer edge is inclusive.
+const beatEpsilon = 1e-9;
+function pastWindow(note, atBeat) {
+  return note === items[items.length - 1]
+    ? atBeat > note.closes + beatEpsilon
+    : atBeat >= note.closes - beatEpsilon;
+}
 function isSounding(midi, incoming) {
   if (!microphone.ready || !micVoice || micVoice === incoming ||
       micVoice.ended || micVoice.midi !== midi) return false;
@@ -197,8 +253,7 @@ function progress(incoming = null) {
     const target = items[targetIndex];
     if (beat + .000001 < target.start) break;
     if (early) { nextTarget(true); continue; }
-    const late = (beat - target.start) * secondsPerBeat;
-    if (practice() || late <= lateWindow() + .000001) {
+    if (practice() || !pastWindow(target, beat)) {
       if (isSounding(target.midi, incoming)) {
         nextTarget(true);
         continue;
@@ -210,19 +265,26 @@ function progress(incoming = null) {
       tell('Soita ' + target.name);
       break;
     }
-    if (late <= lateWindow() + .000001) break;
+    if (!pastWindow(target, beat)) break;
     nextTarget(false);
   }
 }
-function inputNote(voice) {
+function inputNote(voice, at) {
   if (origin === null) return;
+  const playedBeat = beatAtAttack(at);
+  if (playedBeat === null) return;
   progress(voice);
   const target = items[targetIndex];
-  if (!target || early || (target.start - beat) * secondsPerBeat > earlyWindow() + .000001) return;
-  if (target.midi === voice.midi) {
-    if (beat >= target.start - .000001) nextTarget(true);
+  const measured = waiting && playedBeat >= target.start ? target : items.find(note =>
+    playedBeat >= note.opens - beatEpsilon && !pastWindow(note, playedBeat));
+  if (!measured) return;
+  if (measured.midi === voice.midi) {
+    recordTiming(measured, playedBeat);
+    if (measured !== target) {
+      if (measured.start <= beat) markHit(measured);
+    } else if (beat >= target.start - .000001) nextTarget(true);
     else early = true;
-  } else if (practice()) {
+  } else if (measured === target && !early && practice()) {
     mistakes++;
     tell('Odotetaan ' + target.name);
     if (mistakes >= 2) showFingering(target);
@@ -247,6 +309,7 @@ function animate() {
 function pause() {
   window.kulkusetSnow?.setPaused(true);
   beat = Math.min(duration, position(audio.currentTime));
+  if (waiting) from = clockBeat(audio.currentTime);
   origin = null;
   cancelAnimationFrame(frame);
   clearInterval(timer);
@@ -271,12 +334,13 @@ play.onclick = async () => {
     if (document.hidden || game.hidden || microphone.engine.context !== context) return;
     if (beat >= duration) {
       beat = -4; targetIndex = 0; mistakes = 0;
-      setScore(0);
+      resetResults();
       early = waiting = false; hint.hidden = true;
-      for (const item of items) item.el.classList.remove('accepted');
     }
-    from = beat;
+    if (!waiting) from = beat;
     origin = audio.currentTime + .05;
+    timingSegments.length = 0;
+    rememberClock();
     nextClick = play.textContent === 'Jatka' ? Math.floor(beat) + 1 : Math.ceil(beat);
     if (beat === -4) nextClick = -4;
     play.textContent = 'Tauko';
@@ -301,6 +365,7 @@ microphone.setReleaseDelayMs(0);
 const maxUnpitchedMs = 20;
 let unpitchedMs = 0;
 let micVoice = null;
+let articulationEpoch = null;
 const game = document.getElementById('game');
 const picker = document.getElementById('song-picker');
 const songList = document.getElementById('song-list');
@@ -347,6 +412,7 @@ function refreshMic() {
   }
   endVoice();
   micVoice = null;
+  articulationEpoch = null;
   const active = microphone.opening || microphone.engine.running;
   const wasPlaying = !game.hidden;
   if (wasPlaying && !active) {
@@ -370,10 +436,10 @@ function refreshMic() {
   if (wasPlaying && !active && !document.hidden) lastSongButton?.focus();
 }
 microphone.addEventListener('change', refreshMic);
-function beginVoice(midi) {
+function beginVoice(midi, at = microphone.engine.context.currentTime) {
   unpitchedMs = 0;
   micVoice = {midi, ended:false};
-  inputNote(micVoice);
+  inputNote(micVoice, at);
 }
 function endVoice() {
   unpitchedMs = 0;
@@ -390,10 +456,14 @@ microphone.engine.addEventListener('input', ({detail}) => {
   }
 });
 microphone.addEventListener('articulation', ({detail}) => {
-  if (!microphone.ready || micVoice?.midi !== detail.midi) return;
-  // A distinct attack can also arrive inside the early timing window.
+  if (!microphone.ready) return;
+  const now = microphone.engine.context.currentTime;
+  // Onset is emitted immediately. Reattack carries the earlier sample timestamp.
+  if (detail.kind === 'onset') articulationEpoch = now - detail.timeMs / 1000;
+  if (micVoice?.midi !== detail.midi) return;
   if (detail.kind === 'reattack' || (detail.kind === 'onset' && micVoice.ended)) {
-    beginVoice(detail.midi);
+    const at = articulationEpoch === null ? now : Math.min(now, articulationEpoch + detail.timeMs / 1000);
+    beginVoice(detail.midi, at);
   }
 });
 
