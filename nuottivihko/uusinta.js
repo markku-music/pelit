@@ -19,11 +19,25 @@ function startTake(resuming) {
   }
   discardTake();
   if (!window.MediaRecorder) return;
+  let source, gain, output;
+  function disconnectRecording() {
+    source?.disconnect();
+    gain?.disconnect();
+    output?.stream.getTracks().forEach(track => track.stop());
+  }
   try {
-    const recorder = new MediaRecorder(microphone.engine.stream);
+    source = audio.createMediaStreamSource(microphone.engine.stream);
+    gain = audio.createGain();
+    gain.gain.value = 10 ** (6 / 20);
+    output = audio.createMediaStreamDestination();
+    output.channelCount = 1;
+    source.connect(gain);
+    gain.connect(output);
+    const recorder = new MediaRecorder(output.stream);
     const session = {recorder, frames:[], hits:[], chunks:[], elapsed:0, started:audio.currentTime};
     recorder.ondataavailable = e => { if (e.data.size) session.chunks.push(e.data); };
     recorder.onstop = () => {
+      disconnectRecording();
       if (take !== session || !session.chunks.length || !session.frames.length) return;
       session.url = URL.createObjectURL(new Blob(session.chunks, {type:recorder.mimeType}));
       session.chunks.length = 0;
@@ -32,7 +46,10 @@ function startTake(resuming) {
     recorder.start(1000);
     take = session;
     captureFrame();
-  } catch { tell('Äänitys ei käynnistynyt.'); }
+  } catch {
+    disconnectRecording();
+    tell('Äänitys ei käynnistynyt.');
+  }
 }
 
 function captureFrame() {
