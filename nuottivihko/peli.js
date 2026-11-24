@@ -183,13 +183,12 @@ function nextTarget(played) {
 // Windows are in seconds. Cap them at fast tempi to keep consecutive attacks distinct.
 function earlyWindow() { return Math.min(.150, secondsPerBeat * .40); }
 function lateWindow() { return Math.min(.200, secondsPerBeat * .45); }
-function heldFor(midi, incoming) {
-  if (!microphone.ready || !micVoice || micVoice === incoming || micVoice.used ||
-      micVoice.ended || micVoice.midi !== midi) return null;
+function isSounding(midi, incoming) {
+  if (!microphone.ready || !micVoice || micVoice === incoming ||
+      micVoice.ended || micVoice.midi !== midi) return false;
   const state = microphone.getState();
-  if (Number(state.note?.id) !== midi) return null;
-  const live = state.accepted ? Number(state.accepted.id) === midi : state.aboveGate;
-  return live ? micVoice : null;
+  if (Number(state.note?.id) !== midi) return false;
+  return state.accepted ? Number(state.accepted.id) === midi : state.aboveGate;
 }
 function progress(incoming = null) {
   if (origin === null) return;
@@ -200,9 +199,7 @@ function progress(incoming = null) {
     if (early) { nextTarget(true); continue; }
     const late = (beat - target.start) * secondsPerBeat;
     if (practice() || late <= lateWindow() + .000001) {
-      const sounding = heldFor(target.midi, incoming);
-      if (sounding) {
-        sounding.used = true;
+      if (isSounding(target.midi, incoming)) {
         nextTarget(true);
         continue;
       }
@@ -223,7 +220,6 @@ function inputNote(voice) {
   const target = items[targetIndex];
   if (!target || early || (target.start - beat) * secondsPerBeat > earlyWindow() + .000001) return;
   if (target.midi === voice.midi) {
-    voice.used = true;
     if (beat >= target.start - .000001) nextTarget(true);
     else early = true;
   } else if (practice()) {
@@ -341,7 +337,7 @@ function refreshMic() {
     // The articulation observer can report that same change several blocks later.
     if (state.note && state.note.id === state.accepted?.id) {
       const midi = Number(state.note.id);
-      if (micVoice?.midi !== midi) beginVoice(midi);
+      if (micVoice?.midi !== midi || micVoice.ended) beginVoice(midi);
     }
     return;
   }
@@ -370,7 +366,7 @@ function refreshMic() {
 }
 microphone.addEventListener('change', refreshMic);
 function beginVoice(midi) {
-  micVoice = {midi, used:false, ended:false};
+  micVoice = {midi, ended:false};
   inputNote(micVoice);
 }
 microphone.engine.addEventListener('silence', () => {
@@ -379,7 +375,7 @@ microphone.engine.addEventListener('silence', () => {
 });
 microphone.addEventListener('articulation', ({detail}) => {
   if (!microphone.ready || micVoice?.midi !== detail.midi) return;
-  // Only a separate attack can play another star at the same pitch.
+  // A distinct attack can also arrive inside the early timing window.
   if (detail.kind === 'reattack' || (detail.kind === 'onset' && micVoice.ended)) {
     beginVoice(detail.midi);
   }
