@@ -1740,3 +1740,22 @@
   }
   global.ResonatorSession = ResonatorSession;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// Reusable game tuner. mount(host), then show(read(session, expectedName)) per display frame.
+// Store the object returned by read() to reproduce the same display in a replay.
+globalThis.ResonatorTuner = {
+  read(session, expected = '—') {
+    const state = session.getState();
+    const cents = session.getNeedleCents();
+    const played = state.aboveGate && (state.pitch?.anchorName || state.note?.name);
+    return {expected, played: played ? played.toLowerCase() : '—', cents: played && Number.isFinite(cents) ? cents : null};
+  },
+  mount(host) {
+    host.innerHTML = '<div style="position:relative;height:15px;border-bottom:1px solid #e6c890;background:linear-gradient(90deg,transparent calc(50% - 1px),#ffd785 calc(50% - 1px) calc(50% + 1px),transparent calc(50% + 1px))"><i hidden data-needle style="position:absolute;bottom:0;height:14px;width:3px;background:white;box-shadow:0 0 3px #fff;transform:translateX(-50%)"></i></div>';
+    const needle = host.querySelector('[data-needle]');
+    return function show(value) {
+      needle.hidden = !Number.isFinite(value.cents);
+      if (!needle.hidden) needle.style.left = (50 + Math.max(-50, Math.min(50, value.cents))) + '%';
+    };
+  }
+};

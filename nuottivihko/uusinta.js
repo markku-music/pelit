@@ -55,7 +55,7 @@ function startTake(resuming) {
 function captureFrame() {
   if (take?.recorder.state !== 'recording') return;
   take.frames.push({time:take.elapsed + audio.currentTime - take.started, beat,
-    note:soundingNote.textContent, cue:cue.textContent, accuracy:accuracyLabel.textContent,
+    tuner:readTuner(), note:soundingNote.textContent, cue:cue.textContent, accuracy:accuracyLabel.textContent,
     score, hits:take.hits.splice(0), finger:hint.hidden ? null : targetIndex});
 }
 
@@ -68,6 +68,7 @@ function pauseTake(done) {
 }
 
 function showReplayFrame(f) {
+  showTuner(f.tuner);
   beat = f.beat;
   draw();
   soundingNote.textContent = f.note;
@@ -124,3 +125,13 @@ listen.onclick = async () => {
   try { await player.play(); render(); }
   catch { if (listening && session.player === player) player.onerror(); }
 };
+
+const showTuner = ResonatorTuner.mount(document.getElementById('tuner'));
+function readTuner() {
+  return ResonatorTuner.read(microphone, items[targetIndex]?.name ?? '—');
+}
+function updateLiveTuner() {
+  if (!game.hidden && !document.hidden && !listening) showTuner(readTuner());
+  requestAnimationFrame(updateLiveTuner);
+}
+requestAnimationFrame(updateLiveTuner);
